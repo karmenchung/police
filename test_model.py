@@ -51,7 +51,7 @@ def main():
 
 
 def run_prompt(prompt, system, tokenizer, model, max_new_tokens):
-    messages = [
+    messages = [ 
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
