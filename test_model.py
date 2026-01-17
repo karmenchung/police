@@ -3,11 +3,6 @@ import os
 import sys
 import torch
 
-# Force Hugging Face caches onto F: to avoid filling C:
-os.environ["HF_HOME"] = r"F:\python\警察\.hf_cache"
-os.environ["HF_HUB_CACHE"] = r"F:\python\警察\.hf_cache\hub"
-os.environ["TRANSFORMERS_CACHE"] = r"F:\python\警察\.hf_cache\transformers"
-
 try:
     import accelerate
 except Exception:
