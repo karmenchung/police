@@ -50,6 +50,25 @@ def parse_block(lines, fallback_index):
     return block_index, timestamp, text
 
 
+def parse_timestamp_range(timestamp):
+    if not timestamp or "-->" not in timestamp:
+        return None, None
+    parts = [p.strip() for p in timestamp.split("-->")]
+    if len(parts) != 2:
+        return None, None
+    return parts[0], parts[1]
+
+
+def merge_timestamps(first_ts, last_ts):
+    start, _ = parse_timestamp_range(first_ts)
+    _, end = parse_timestamp_range(last_ts)
+    if start and end:
+        return f"{start} --> {end}"
+    if first_ts:
+        return first_ts
+    return last_ts
+
+
 def run_prompt(prompt, system, tokenizer, model, max_new_tokens):
     messages = [
         {"role": "system", "content": system},
@@ -74,12 +93,34 @@ def run_prompt(prompt, system, tokenizer, model, max_new_tokens):
     return tokenizer.decode(new_tokens, skip_special_tokens=True)
 
 
+def choose_grouping(text_a, text_b, text_c, tokenizer, model):
+    selection_system = (
+        "You choose the most fluent combined subtitle. Reply with only A, B, or C."
+    )
+    prompt = (
+        "A:\n"
+        f"{text_a}\n\n"
+        "B:\n"
+        f"{text_a} {text_b}\n\n"
+        "C:\n"
+        f"{text_a} {text_b} {text_c}\n\n"
+        "Reply with only A, B, or C."
+    )
+    result = run_prompt(prompt, selection_system, tokenizer, model, 8)
+    result = result.strip().upper()
+    if result.startswith("C"):
+        return 3
+    if result.startswith("B"):
+        return 2
+    return 1
+
+
 def main():
     parser = argparse.ArgumentParser(description="Translate text parts from an SRT file.")
     parser.add_argument("srt_path", nargs="?", default=None, help="Path to .srt file")
     parser.add_argument("--model", default="Qwen/Qwen3-4B-Instruct-2507", help="Model name or path")
     parser.add_argument("--system", default="你是一个可靠的翻译助手，我给你的所有英文请翻译成中文，不要添加任何解释。必须翻译。日常口吻。", help="System prompt text")
-    parser.add_argument("--max-new-tokens", type=int, default=128, help="Max new tokens")
+    parser.add_argument("--max-new-tokens", type=int, default=256, help="Max new tokens")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -130,28 +171,65 @@ def main():
             raise SystemExit("Please provide an .srt path, e.g. python translate.py origin_english.srt")
 
     content = path.read_text(encoding="utf-8-sig", errors="ignore")
+    raw_blocks = list(extract_text_blocks(content))
+
+    parsed_blocks = []
+    fallback_index = 1
+    for block in raw_blocks:
+        parsed = parse_block(block, fallback_index)
+        if not parsed:
+            continue
+        block_index, timestamp, text = parsed
+        fallback_index += 1
+        if not text:
+            continue
+        parsed_blocks.append(
+            {"index": block_index, "timestamp": timestamp, "text": text}
+        )
 
     output_path = Path("translated.srt")
-    fallback_index = 1
+    out_index = 1
+    i = 0
     with output_path.open("w", encoding="utf-8") as out_file:
-        for block in extract_text_blocks(content):
-            parsed = parse_block(block, fallback_index)
-            if not parsed:
-                continue
-            block_index, timestamp, text = parsed
-            fallback_index += 1
-            if not text:
-                continue
-            reply = run_prompt(text, args.system, tokenizer, model, args.max_new_tokens)
-            print(block_index)
-            if timestamp:
-                print(timestamp)
+        while i < len(parsed_blocks):
+            a = parsed_blocks[i]
+            b = parsed_blocks[i + 1] if i + 1 < len(parsed_blocks) else None
+            c = parsed_blocks[i + 2] if i + 2 < len(parsed_blocks) else None
+
+            text_a = a["text"]
+            text_b = b["text"] if b else ""
+            text_c = c["text"] if c else ""
+
+            if c:
+                count = choose_grouping(text_a, text_b, text_c, tokenizer, model)
+            elif b:
+                count = 2
+            else:
+                count = 1
+
+            selected = parsed_blocks[i : i + count]
+            combined_text = " ".join(item["text"] for item in selected)
+            combined_timestamp = merge_timestamps(
+                selected[0]["timestamp"], selected[-1]["timestamp"]
+            )
+
+            reply = run_prompt(
+                combined_text, args.system, tokenizer, model, args.max_new_tokens
+            )
+
+            print(out_index)
+            if combined_timestamp:
+                print(combined_timestamp)
             print(reply)
             print("")
-            out_file.write(block_index + "\n")
-            if timestamp:
-                out_file.write(timestamp + "\n")
+
+            out_file.write(str(out_index) + "\n")
+            if combined_timestamp:
+                out_file.write(combined_timestamp + "\n")
             out_file.write(reply + "\n\n")
+
+            out_index += 1
+            i += count
 
 
 if __name__ == "__main__":
