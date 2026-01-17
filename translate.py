@@ -131,21 +131,27 @@ def main():
 
     content = path.read_text(encoding="utf-8-sig", errors="ignore")
 
+    output_path = Path("translated.srt")
     fallback_index = 1
-    for block in extract_text_blocks(content):
-        parsed = parse_block(block, fallback_index)
-        if not parsed:
-            continue
-        block_index, timestamp, text = parsed
-        fallback_index += 1
-        if not text:
-            continue
-        reply = run_prompt(text, args.system, tokenizer, model, args.max_new_tokens)
-        print(block_index)
-        if timestamp:
-            print(timestamp)
-        print(reply)
-        print("")
+    with output_path.open("w", encoding="utf-8") as out_file:
+        for block in extract_text_blocks(content):
+            parsed = parse_block(block, fallback_index)
+            if not parsed:
+                continue
+            block_index, timestamp, text = parsed
+            fallback_index += 1
+            if not text:
+                continue
+            reply = run_prompt(text, args.system, tokenizer, model, args.max_new_tokens)
+            print(block_index)
+            if timestamp:
+                print(timestamp)
+            print(reply)
+            print("")
+            out_file.write(block_index + "\n")
+            if timestamp:
+                out_file.write(timestamp + "\n")
+            out_file.write(reply + "\n\n")
 
 
 if __name__ == "__main__":
