@@ -31,16 +31,23 @@ def extract_text_blocks(content: str):
         yield current
 
 
-def text_from_block(lines):
+def parse_block(lines, fallback_index):
     if not lines:
-        return ""
+        return None
     idx = 0
-    if lines and lines[0].strip().isdigit():
+    block_index = None
+    if lines[0].strip().isdigit():
+        block_index = lines[0].strip()
         idx = 1
+    else:
+        block_index = str(fallback_index)
+    timestamp = None
     if idx < len(lines) and "-->" in lines[idx]:
+        timestamp = lines[idx].strip()
         idx += 1
     text_lines = [ln.strip() for ln in lines[idx:] if ln.strip()]
-    return " ".join(text_lines)
+    text = " ".join(text_lines)
+    return block_index, timestamp, text
 
 
 def run_prompt(prompt, system, tokenizer, model, max_new_tokens):
@@ -71,7 +78,7 @@ def main():
     parser = argparse.ArgumentParser(description="Translate text parts from an SRT file.")
     parser.add_argument("srt_path", nargs="?", default=None, help="Path to .srt file")
     parser.add_argument("--model", default="Qwen/Qwen3-4B-Instruct-2507", help="Model name or path")
-    parser.add_argument("--system", default="你是一个可靠的翻译助手，我给你的所有英文请翻译成中文，不要添加任何解释。必须翻译。可以添加一些幽默感。", help="System prompt text")
+    parser.add_argument("--system", default="你是一个可靠的翻译助手，我给你的所有英文请翻译成中文，不要添加任何解释。必须翻译。日常口吻。", help="System prompt text")
     parser.add_argument("--max-new-tokens", type=int, default=128, help="Max new tokens")
     args = parser.parse_args()
 
@@ -124,11 +131,21 @@ def main():
 
     content = path.read_text(encoding="utf-8-sig", errors="ignore")
 
+    fallback_index = 1
     for block in extract_text_blocks(content):
-        text = text_from_block(block)
-        if text:
-            reply = run_prompt(text, args.system, tokenizer, model, args.max_new_tokens)
-            print(text, "|", reply)
+        parsed = parse_block(block, fallback_index)
+        if not parsed:
+            continue
+        block_index, timestamp, text = parsed
+        fallback_index += 1
+        if not text:
+            continue
+        reply = run_prompt(text, args.system, tokenizer, model, args.max_new_tokens)
+        print(block_index)
+        if timestamp:
+            print(timestamp)
+        print(reply)
+        print("")
 
 
 if __name__ == "__main__":
