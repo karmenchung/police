@@ -115,7 +115,6 @@ def run_prompt(prompt, system, tokenizer, model, max_new_tokens):
         return_tensors="pt",
     ).to(model.device)
     with torch.no_grad():
-        print(prompt)
         output = model.generate(
             input_ids=inputs,
             max_new_tokens=max_new_tokens,
