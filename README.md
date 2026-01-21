@@ -2,7 +2,8 @@
 for example, `https://www.youtube.com/watch?v=dKG-mswPB7s`:
 ```sh
 pip install youtube-transcript-api
-youtube_transcript_api dKG-mswPB7s --format srt > output/transcript.srt
+cd .\TTS\index-tts
+uv run youtube_transcript_api dKG-mswPB7s --format srt > ..\..\generated.srt
 ```
 
 ## 模型下载
