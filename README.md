@@ -36,5 +36,5 @@ mv translated.srt ./output
 
 ## 视频下载
 ```
-TTS\index-tts> uv run yt-dlp https://www.youtube.com/watch?v=dKG-mswPB7s
+downloader> uv run yt-dlp -t mp4 https://www.youtube.com/watch?v=dKG-mswPB7s
 ```
