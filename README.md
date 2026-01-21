@@ -33,3 +33,8 @@ uv run .\webui.py
 CUDA_VISIBLE_DEVICES=0 python translate.py output/transcript.srt
 mv translated.srt ./output
 ```
+
+## 视频下载
+```
+TTS\index-tts> uv run yt-dlp https://www.youtube.com/watch?v=dKG-mswPB7s
+```
