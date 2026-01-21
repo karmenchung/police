@@ -12,18 +12,56 @@ except Exception:
 from transformers import AutoModelForCausalLM, AutoTokenizer, __version__ as hf_version
 
 
+def read_srt_text(path: Path) -> str:
+    data = path.read_bytes()
+    if not data:
+        return ""
+    if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+        return data.decode("utf-16")
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = None
+    if text is None or "\x00" in text:
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
+    if text is None:
+        return data.decode("utf-8", errors="ignore")
+    return text
+
+
 def extract_text_blocks(content: str):
-    blocks = content.splitlines()
-    current = []
-    for line in blocks:
-        if line.strip() == "":
-            if current:
-                yield current
-                current = []
+    lines = content.splitlines()
+    if any(line.strip() == "" for line in lines):
+        current = []
+        for line in lines:
+            if line.strip() == "":
+                if current:
+                    yield current
+                    current = []
+                continue
+            current.append(line.rstrip("\n"))
+        if current:
+            yield current
+        return
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.isdigit() and i + 1 < len(lines) and "-->" in lines[i + 1]:
+            block = [lines[i], lines[i + 1]]
+            i += 2
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if next_line.isdigit() and i + 1 < len(lines) and "-->" in lines[i + 1]:
+                    break
+                block.append(lines[i])
+                i += 1
+            yield block
             continue
-        current.append(line.rstrip("\n"))
-    if current:
-        yield current
+        i += 1
 
 
 def parse_block(lines, fallback_index):
@@ -65,6 +103,8 @@ def merge_timestamps(first_ts, last_ts):
 
 
 def run_prompt(prompt, system, tokenizer, model, max_new_tokens):
+    print("prompt:",prompt) 
+    print("-"*60)
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": prompt},
@@ -75,6 +115,7 @@ def run_prompt(prompt, system, tokenizer, model, max_new_tokens):
         return_tensors="pt",
     ).to(model.device)
     with torch.no_grad():
+        print(prompt)
         output = model.generate(
             input_ids=inputs,
             max_new_tokens=max_new_tokens,
@@ -165,7 +206,7 @@ def main():
         else:
             raise SystemExit("Please provide an .srt path, e.g. python translate.py origin_english.srt")
 
-    content = path.read_text(encoding="utf-8-sig", errors="ignore")
+    content = read_srt_text(path)
     raw_blocks = list(extract_text_blocks(content))
 
     parsed_blocks = []
