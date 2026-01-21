@@ -1,3 +1,10 @@
+## 字幕下载
+for example, `https://www.youtube.com/watch?v=dKG-mswPB7s`:
+```sh
+pip install youtube-transcript-api
+youtube_transcript_api dKG-mswPB7s --format srt > output/transcript.srt
+```
+
 ## 模型下载
 Qwen 模型：
 ```
@@ -18,4 +25,10 @@ $env:HF_HOME = "F:\C_disk\hf_cache"
 $env:HF_HUB_CACHE = "F:\C_disk\hf_cache\hub"
 $env:TRANSFORMERS_CACHE = "F:\C_disk\hf_cache\transformers"
 uv run .\webui.py
+```
+
+## 字幕翻译
+```sh
+CUDA_VISIBLE_DEVICES=0 python translate.py output/transcript.srt
+mv translated.srt ./output
 ```
